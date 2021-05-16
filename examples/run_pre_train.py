@@ -14,7 +14,6 @@
 # limitations under the License.
 """PyTorch pretrain for ZEN model."""
 import sys
-
 sys.path.append("..")
 from argparse import ArgumentParser
 from pathlib import Path
@@ -39,7 +38,8 @@ from ZEN import BertAdam, WarmupLinearSchedule
 
 InputFeatures = namedtuple(
     "InputFeatures",
-    "input_ids input_mask segment_ids lm_label_ids is_next ngram_ids ngram_masks ngram_positions ngram_starts ngram_lengths ngram_segment_ids")
+    "input_ids input_mask segment_ids lm_label_ids is_next ngram_ids ngram_masks ngram_positions ngram_starts "
+    "ngram_lengths ngram_segment_ids")
 
 log_format = '%(asctime)-10s: %(message)s'
 logging.basicConfig(level=logging.INFO, format=log_format)
@@ -53,7 +53,6 @@ def convert_example_to_features(example, tokenizer, max_seq_length, max_ngram_in
     masked_lm_labels = example["masked_lm_labels"]
 
     # add ngram level information
-    print(example)
     ngram_ids = example["ngram_ids"]
     ngram_positions = example["ngram_positions"]
     ngram_lengths = example["ngram_lengths"]
@@ -74,13 +73,9 @@ def convert_example_to_features(example, tokenizer, max_seq_length, max_ngram_in
 
     lm_label_array = np.full(max_seq_length, dtype=np.int, fill_value=-1)
     lm_label_array[masked_lm_positions] = masked_label_ids
-    # max_ngram_in_sequence=200
 
     # add ngram pads
     ngram_id_array = np.zeros(max_ngram_in_sequence, dtype=np.int)
-    print(len(ngram_id_array))
-    print(ngram_id_array[:4])
-    print(len(ngram_ids))
     ngram_id_array[:len(ngram_ids)] = ngram_ids
 
     # record the masked positions
@@ -307,14 +302,13 @@ def main():
     assert args.pregenerated_data.is_dir(), \
         "--pregenerated_data should point to the folder of files made by pregenerate_training_data.py!"
 
-
     samples_per_epoch = []
     for i in range(args.epochs):
         epoch_file = args.pregenerated_data / f"epoch_{i}.json"
         metrics_file = args.pregenerated_data / f"epoch_{i}_metrics.json"
         if epoch_file.is_file() and metrics_file.is_file():
-            metrics = json.loads(metrics_file.read_text())
-            samples_per_epoch.append(metrics['num_training_examples'])
+            metrics = json.loads(metrics_file.read_text())  # 将字符串转化为字典
+            samples_per_epoch.append(metrics['num_training_examples'])  # 训练实例的数目
         else:
             if i == 0:
                 exit("No training data was found!")
@@ -323,12 +317,8 @@ def main():
             num_data_epochs = i
             break
     else:
-        num_data_epochs = args.epochs
-    print("从之前创建的文件中加载pregenerated_data")
-    print(metrics)
-    print(samples_per_epoch)
+        num_data_epochs = args.epochs  # epoch的数目
 
-    print("设备信息")
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()
@@ -352,24 +342,16 @@ def main():
     torch.manual_seed(args.seed)
     if n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
-    print("调用 tokenize")
+
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
-    print("这里")
-    total_train_examples = 0
+    total_train_examples = 0  # 所有epochs加起来总的训练实例数目
     for i in range(args.epochs):
-        # 该模块考虑到这样一个事实，即我们可能会对有限的数据进行循环
-        # The module takes into account the fact that we may loop over limited epochs of data
+        # The modulo takes into account the fact that we may loop over limited epochs of data
         total_train_examples += samples_per_epoch[i % len(samples_per_epoch)]
-        print(total_train_examples)
 
     num_train_optimization_steps = int(
         total_train_examples / args.train_batch_size / args.gradient_accumulation_steps)
-    print("batch_size")
-    print(args.train_batch_size)
-    print("gradient_accumulation_steps")
-    print(args.gradient_accumulation_steps)
-    print(args.local_rank)
     if args.local_rank != -1:
         num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
@@ -377,16 +359,11 @@ def main():
         config = ZenConfig(21128, 104089)
         model = ZenForPreTraining(config)
     else:
-        print("args.scratch=false从ZenForPreTraining开始")
         model = ZenForPreTraining.from_pretrained(args.bert_model)
 
-    print("args.fp16")
-    print(args.fp16)
     if args.fp16:
         model.half()
     model.to(device)
-    print("args.local_rank")
-    print(args.local_rank)
     if args.local_rank != -1:
         try:
             from apex.parallel import DistributedDataParallel as DDP
@@ -399,8 +376,6 @@ def main():
 
     # Prepare optimizer
     param_optimizer = list(model.named_parameters())
-    print(param_optimizer)
-    print('9999999999999999999999999999999999999999999999999999999999')
     no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
