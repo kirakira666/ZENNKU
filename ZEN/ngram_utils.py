@@ -49,7 +49,7 @@ class ZenNgramDict(object):
                 # ngram = line
                 # freq = i
                 # 改成路径名之后又在这里出问题
-                ngram,freq = line.split(",")
+                ngram,freq = line.split(" ")
                 tokens = tuple(tokenizer.tokenize(ngram))
                 # print(tokens)
                 self.ngram_to_freq_dict[ngram] = freq

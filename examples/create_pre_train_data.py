@@ -217,7 +217,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob, max_predictions_per_seq
                 # 10% of the time, replace with random word
                 # 10%的概率会用一个随机的word来代替当前的token
                 else:
-                    masked_token = choice(['a','c','t','g'])
+                    masked_token = choice(['A','C','T','G'])
             # 将当前的token以(index, token)的形式加入到masked_lms中
             # 为什么没有替换成[MASK]的token也会加入？
             masked_lms.append(MaskedLmInstance(index=index, label=tokens[index]))
