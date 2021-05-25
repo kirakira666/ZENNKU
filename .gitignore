@@ -1,3 +1,5 @@
 *.txt
 result/
 dsk-2.1.0-Linux/
+ngram/
+ngram_k/
