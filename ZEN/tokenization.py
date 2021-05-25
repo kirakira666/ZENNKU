@@ -61,29 +61,26 @@ PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP = {
     'bert-large-cased-whole-word-masking-finetuned-squad': 512,
     'bert-base-cased-finetuned-mrpc': 512,
 }
-
-# 如果用目录再其下找到vocab.txt
 VOCAB_NAME = 'vocab.txt'
 
 
-# 把词汇文件的内容存入字典，key为字符，value为序号
+# 将vocab_file中的每一行看作一个token，将token作为key，index作为value存入有序字典中
 def load_vocab(vocab_file):
-    print('当前vocab缓存地址')
-    print(vocab_file)
-    # """Loads a vocabulary file into a dictionary."""
-    vocab = collections.OrderedDict()
+    """Loads a vocabulary file into a dictionary."""
+    vocab = collections.OrderedDict()  # vocab是一个有序字典
     index = 0
     with open(vocab_file, "r", encoding="utf-8") as reader:
         while True:
             token = reader.readline()
             if not token:
                 break
-            token = token.strip()
+            token = token.strip()  # 去掉token首尾的空格
             vocab[token] = index
             index += 1
     return vocab
 
 
+# 将text中所有空格去掉，被分割开的tokens提取出来
 def whitespace_tokenize(text):
     """Runs basic whitespace cleaning and splitting on a piece of text."""
     text = text.strip()
@@ -93,10 +90,9 @@ def whitespace_tokenize(text):
     return tokens
 
 
+# 进行wordpiece级别的分词
 class BertTokenizer(object):
     """Runs end-to-end tokenization: punctuation splitting + wordpiece"""
-
-    # 运行端到端tokenize: 标点分割 + 单词分割
 
     def __init__(self, vocab_file, do_lower_case=True, max_len=None, do_basic_tokenize=True,
                  never_split=("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]")):
@@ -111,45 +107,35 @@ class BertTokenizer(object):
                          Effective maximum length is always the minimum of this
                          value (if specified) and the underlying BERT model's
                          sequence length.
-                         用于截断标记化序列的人工最大长度;有效最大长度总是此值(如果指定)和底层BERT模型序列长度的最小值。
           never_split: List of tokens which will never be split during tokenization.
                          Only has an effect when do_wordpiece_only=False
         """
-        self.vocab_file = vocab_file
         if not os.path.isfile(vocab_file):
             raise ValueError(
                 "Can't find a vocabulary file at path '{}'. To load the vocabulary from a Google pretrained "
                 "model use `tokenizer = BertTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`".format(vocab_file))
-        # 把词汇文件的内容存入vocab，key为字符，value为序号
-        self.vocab = load_vocab(vocab_file)
-        # print(self.vocab)
-        # 把vocab存成collections.OrderedDict有序字典value为字符，key为序号
+        self.vocab = load_vocab(vocab_file)  # 有序字典，tokens作为key，index作为value
         self.ids_to_tokens = collections.OrderedDict(
-            [(ids, tok) for tok, ids in self.vocab.items()])
-        # print(self.ids_to_tokens)
+            [(ids, tok) for tok, ids in self.vocab.items()])  # 将index作为key，tokens作为value
         self.do_basic_tokenize = do_basic_tokenize
-        # do basic tokenization before wordpiece
         if do_basic_tokenize:
-            # print('00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000')
-            self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case,
-                                                  never_split=never_split)
-
+          self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case,
+                                                never_split=never_split)
         self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
         self.max_len = max_len if max_len is not None else int(1e12)
 
-    # tokenize一段没有中断符的文字
     def tokenize(self, text):
         split_tokens = []
-        # print(self.do_basic_tokenize)
-        # 需要做基本tokenize
         if self.do_basic_tokenize:
             for token in self.basic_tokenizer.tokenize(text):
-                for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                    split_tokens.append(sub_token)
+                split_tokens.append(token)
+                # for sub_token in self.wordpiece_tokenizer.tokenize(token):
+                #     split_tokens.append(sub_token)
         else:
             split_tokens = self.wordpiece_tokenizer.tokenize(text)
         return split_tokens
 
+    # 给定tokens，返回字典中tokens所对应的indexes序列
     def convert_tokens_to_ids(self, tokens):
         """Converts a sequence of tokens into ids using the vocab."""
         ids = []
@@ -163,6 +149,7 @@ class BertTokenizer(object):
             )
         return ids
 
+    # 给定indexes，返回字典中indexes所对应的tokens序列
     def convert_ids_to_tokens(self, ids):
         """Converts a sequence of ids in wordpiece tokens using the vocab."""
         tokens = []
@@ -170,11 +157,12 @@ class BertTokenizer(object):
             tokens.append(self.ids_to_tokens[i])
         return tokens
 
+    # 把分词以后的词汇保存到指定路径加上子路径"/vocab.txt"的文件中,每个token写成一行
     def save_vocabulary(self, vocab_path):
         """Save the tokenizer vocabulary to a directory or file."""
         index = 0
         if os.path.isdir(vocab_path):
-            vocab_file = os.path.join(vocab_path, VOCAB_NAME)
+            vocab_file = os.path.join(vocab_path, VOCAB_NAME)  # 将指定路径加上子路径"/vocab.txt"作为输出路径
         with open(vocab_file, "w", encoding="utf-8") as writer:
             for token, token_index in sorted(self.vocab.items(), key=lambda kv: kv[1]):
                 if index != token_index:
@@ -185,21 +173,15 @@ class BertTokenizer(object):
                 index += 1
         return vocab_file
 
-    # 类方法
-    # 从预训练模型文件中实例化预训练bert模型
-    # 如果需要的话下载缓存预训练模型文件
+# 给出一个预训练模型的名字或路径（在PRETRAINED_VOCAB_ARCHIVE_MAP中），实例化PreTrainedBertModel
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, cache_dir=None, *inputs, **kwargs):
         """
         Instantiate a PreTrainedBertModel from a pre-trained model file.
         Download and cache the pre-trained model file if needed.
         """
-        # 输入为模型名
         if pretrained_model_name_or_path in PRETRAINED_VOCAB_ARCHIVE_MAP:
-            # 找到对应url
             vocab_file = PRETRAINED_VOCAB_ARCHIVE_MAP[pretrained_model_name_or_path]
-            # cased区分大小写，不需要lower - case
-            # uncased不能区分大小写因为词表只有小写需要lower - case
             if '-cased' in pretrained_model_name_or_path and kwargs.get('do_lower_case', True):
                 logger.warning("The pre-trained model you are loading is a cased model but you have not set "
                                "`do_lower_case` to False. We are setting `do_lower_case=False` for you but "
@@ -210,23 +192,12 @@ class BertTokenizer(object):
                                "`do_lower_case` to False. We are setting `do_lower_case=True` for you "
                                "but you may want to check this behavior.")
                 kwargs['do_lower_case'] = True
-        # 输入为模型路径
         else:
             vocab_file = pretrained_model_name_or_path
-        # 判断是否为目录,这里应该要么是网址要么是目录
-        # print('模型的url')
-        # print(vocab_file)
         if os.path.isdir(vocab_file):
-            # 如果用目录再其下找到VOCAB_NAME:vocab.txt
             vocab_file = os.path.join(vocab_file, VOCAB_NAME)
         # redirect to the cache, if necessary
-        print('这里vocab.txt的url')
-        print(vocab_file)
-        # 缓存该路径下的vocab.txt文件
         try:
-            # cached_path()函数：给定一个可能是URL(或者可能是本地路径)的东西，确定是哪个。
-            # 如果是URL，下载文件并缓存它，然后返回缓存文件的路径。
-            # 如果它已经是一个本地路径，请确保文件存在，然后返回路径。
             resolved_vocab_file = cached_path(vocab_file, cache_dir=cache_dir)
         except EnvironmentError:
             if pretrained_model_name_or_path in PRETRAINED_VOCAB_ARCHIVE_MAP:
@@ -242,25 +213,24 @@ class BertTokenizer(object):
                         ', '.join(PRETRAINED_VOCAB_ARCHIVE_MAP.keys()),
                         vocab_file))
             return None
-        # 说明一下缓存路径
         if resolved_vocab_file == vocab_file:
             logger.info("loading vocabulary file {}".format(vocab_file))
         else:
             logger.info("loading vocabulary file {} from cache at {}".format(
                 vocab_file, resolved_vocab_file))
         if pretrained_model_name_or_path in PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP:
-            # 如果我们使用预训练的模型，确保tokenizer的索引序列不会超过位置embedding的数目
             # if we're using a pretrained model, ensure the tokenizer wont index sequences longer
             # than the number of positional embeddings
             max_len = PRETRAINED_VOCAB_POSITIONAL_EMBEDDINGS_SIZE_MAP[pretrained_model_name_or_path]
-            # 取最小值
             kwargs['max_len'] = min(kwargs.get('max_len', int(1e12)), max_len)
         # Instantiate tokenizer.
-        # 实例化tokenizer返回BertTokenizer对象
         tokenizer = cls(resolved_vocab_file, *inputs, **kwargs)
         return tokenizer
 
 
+# 去掉文本中的无效字符（包括控制字符和NULL等）
+# 如果是英文则最终生成的tokens列表中，每个英文单词和每个标点符号都是一个单独的token
+# 如果是中文则最终生成的tokens列表中，每个汉字和每个标点符号都是一个单独的token
 class BasicTokenizer(object):
     """Runs basic tokenization (punctuation splitting, lower casing, etc.)."""
 
@@ -276,29 +246,24 @@ class BasicTokenizer(object):
         self.never_split = never_split
 
     def tokenize(self, text):
-        # print(text)
         """Tokenizes a piece of text."""
-        # _clean_text(text)清除blank
-        text = self._clean_text(text)
+        text = self._clean_text(text)  # 去掉文本里的无效字符，不会去掉空格（\t, \n, 和 \r被视为空格）
         # This was added on November 1st, 2018 for the multilingual and Chinese
         # models. This is also applied to the English models now, but it doesn't
         # matter since the English models were not trained on any Chinese data
         # and generally don't have any Chinese data in them (there are Chinese
         # characters in the vocabulary because Wikipedia does have some Chinese
         # words in the English Wikipedia.).
-
-        # Adds whitespace around any CJK character.
-        text = self._tokenize_chinese_chars(text)
-        orig_tokens = whitespace_tokenize(text)
+        text = self._tokenize_chinese_chars(text)  # 给中文的字与字之间加上空格
+        orig_tokens = whitespace_tokenize(text)  # 将text中所有空格去掉，将被分割开的tokens提取出来
         split_tokens = []
         for token in orig_tokens:
             if self.do_lower_case and token not in self.never_split:
                 token = token.lower()
                 token = self._run_strip_accents(token)
-            split_tokens.extend(self._run_split_on_punc(token))
+            split_tokens.extend(self._run_split_on_punc(token))  # 将标点与文字分割开
 
         output_tokens = whitespace_tokenize(" ".join(split_tokens))
-        # print(output_tokens)
         return output_tokens
 
     def _run_strip_accents(self, text):
@@ -312,6 +277,7 @@ class BasicTokenizer(object):
             output.append(char)
         return "".join(output)
 
+    # 将标点与文字分割开
     def _run_split_on_punc(self, text):
         """Splits punctuation on a piece of text."""
         if text in self.never_split:
@@ -334,19 +300,21 @@ class BasicTokenizer(object):
 
         return ["".join(x) for x in output]
 
+    # 给中文的字与字之间加上空格
     def _tokenize_chinese_chars(self, text):
         """Adds whitespace around any CJK character."""
         output = []
         for char in text:
-            cp = ord(char)
-            if self._is_chinese_char(cp):
-                # print(char)
-                # print(cp)
-                output.append(" ")
-                output.append(char)
-                output.append(" ")
-            else:
-                output.append(char)
+            # cp = ord(char)
+            output.append(" ")
+            output.append(char)
+            output.append(" ")
+            # if self._is_chinese_char(cp):
+            #     output.append(" ")
+            #     output.append(char)
+            #     output.append(" ")
+            # else:
+            #     output.append(char)
         return "".join(output)
 
     def _is_chinese_char(self, cp):
@@ -371,14 +339,12 @@ class BasicTokenizer(object):
 
         return False
 
+    # 去掉文本里的无效字符，不会去掉空格（\t, \n, 和 \r被视为空格），返回处理后的文本
     def _clean_text(self, text):
         """Performs invalid character removal and whitespace cleanup on text."""
-        # 对文本执行无效字符删除和空白清除。
         output = []
         for char in text:
-            # 返回单字符字符串的Unicode代码点。
             cp = ord(char)
-            # print(cp)
             if cp == 0 or cp == 0xfffd or _is_control(char):
                 continue
             if _is_whitespace(char):
@@ -388,12 +354,15 @@ class BasicTokenizer(object):
         return "".join(output)
 
 
+# For example:
+        #  input = "unaffable"
+        #  output = ["un", "##aff", "##able"]
 class WordpieceTokenizer(object):
     """Runs WordPiece tokenization."""
 
     def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=100):
         self.vocab = vocab
-        self.unk_token = unk_token
+        self.unk_token = unk_token  # UNK=unknown 处理不了的token将用[UNK]代替
         self.max_input_chars_per_word = max_input_chars_per_word
 
     def tokenize(self, text):
@@ -401,7 +370,6 @@ class WordpieceTokenizer(object):
 
         This uses a greedy longest-match-first algorithm to perform tokenization
         using the given vocabulary.
-        -
 
         For example:
           input = "unaffable"
@@ -410,7 +378,6 @@ class WordpieceTokenizer(object):
         Args:
           text: A single token or whitespace separated tokens. This should have
             already been passed through `BasicTokenizer`.
-            单个标记或用空格分隔的标记。这应该已经通过' BasicTokenizer '传递。
 
         Returns:
           A list of wordpiece tokens.
@@ -418,7 +385,7 @@ class WordpieceTokenizer(object):
 
         output_tokens = []
         for token in whitespace_tokenize(text):
-            chars = list(token)
+            chars = list(token)  # chars[]中每个元素都是text去掉空格以后分割成的token,text如果是一个英文单词，则每个元素是一个字母
             if len(chars) > self.max_input_chars_per_word:
                 output_tokens.append(self.unk_token)
                 continue
@@ -450,6 +417,7 @@ class WordpieceTokenizer(object):
         return output_tokens
 
 
+# 检查字符是否是空格（\t, \n, 和 \r被视为空格）
 def _is_whitespace(char):
     """Checks whether `chars` is a whitespace character."""
     # \t, \n, and \r are technically contorl characters but we treat them
@@ -462,6 +430,7 @@ def _is_whitespace(char):
     return False
 
 
+# 检查字符是否是控制字符
 def _is_control(char):
     """Checks whether `chars` is a control character."""
     # These are technically control characters but we count them as whitespace
@@ -474,6 +443,7 @@ def _is_control(char):
     return False
 
 
+# 检查字符是否是标点符号
 def _is_punctuation(char):
     """Checks whether `chars` is a punctuation character."""
     cp = ord(char)
