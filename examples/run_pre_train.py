@@ -60,6 +60,7 @@ def convert_example_to_features(example, tokenizer, max_seq_length, max_ngram_in
 
     assert len(tokens) == len(segment_ids) <= max_seq_length  # The preprocessed data should be already truncated
     input_ids = tokenizer.convert_tokens_to_ids(tokens)
+    # print(input_ids)
     masked_label_ids = tokenizer.convert_tokens_to_ids(masked_lm_labels)
 
     input_array = np.zeros(max_seq_length, dtype=np.int)
@@ -342,7 +343,7 @@ def main():
     torch.manual_seed(args.seed)
     if n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
-
+    print(args.bert_model)
     tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
 
     total_train_examples = 0  # 所有epochs加起来总的训练实例数目
